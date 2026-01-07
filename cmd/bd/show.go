@@ -276,9 +276,35 @@ var showCmd = &cobra.Command{
 					}
 
 					if len(details.Dependencies) > 0 {
-						fmt.Printf("\nDepends on (%d):\n", len(details.Dependencies))
+						// Separate parents from other dependencies
+						var parents []*types.IssueWithDependencyMetadata
+						var otherDeps []*types.IssueWithDependencyMetadata
 						for _, dep := range details.Dependencies {
-							fmt.Printf("  → %s: %s [P%d]\n", dep.ID, dep.Title, dep.Priority)
+							if dep.DependencyType == types.DepParentChild {
+								parents = append(parents, dep)
+							} else {
+								otherDeps = append(otherDeps, dep)
+							}
+						}
+
+						// Display parent(s) separately
+						if len(parents) > 0 {
+							if len(parents) == 1 {
+								fmt.Printf("\nParent:\n")
+							} else {
+								fmt.Printf("\nParents (%d):\n", len(parents))
+							}
+							for _, parent := range parents {
+								fmt.Printf("  ↑ %s: %s [P%d]\n", parent.ID, parent.Title, parent.Priority)
+							}
+						}
+
+						// Display other dependencies
+						if len(otherDeps) > 0 {
+							fmt.Printf("\nDepends on (%d):\n", len(otherDeps))
+							for _, dep := range otherDeps {
+								fmt.Printf("  → %s: %s [P%d]\n", dep.ID, dep.Title, dep.Priority)
+							}
 						}
 					}
 
@@ -508,12 +534,50 @@ var showCmd = &cobra.Command{
 				fmt.Printf("\nLabels: %v\n", labels)
 			}
 
-			// Show dependencies
-			deps, _ := issueStore.GetDependencies(ctx, issue.ID)
-			if len(deps) > 0 {
-				fmt.Printf("\nDepends on (%d):\n", len(deps))
-				for _, dep := range deps {
-					fmt.Printf("  → %s: %s [P%d]\n", dep.ID, dep.Title, dep.Priority)
+			// Show dependencies with metadata to distinguish parent from blocking deps
+			sqliteStore2, ok2 := issueStore.(*sqlite.SQLiteStorage)
+			if ok2 {
+				depsWithMeta, _ := sqliteStore2.GetDependenciesWithMetadata(ctx, issue.ID)
+				if len(depsWithMeta) > 0 {
+					// Separate parents from other dependencies
+					var parents []*types.IssueWithDependencyMetadata
+					var otherDeps []*types.IssueWithDependencyMetadata
+					for _, dep := range depsWithMeta {
+						if dep.DependencyType == types.DepParentChild {
+							parents = append(parents, dep)
+						} else {
+							otherDeps = append(otherDeps, dep)
+						}
+					}
+
+					// Display parent(s) separately
+					if len(parents) > 0 {
+						if len(parents) == 1 {
+							fmt.Printf("\nParent:\n")
+						} else {
+							fmt.Printf("\nParents (%d):\n", len(parents))
+						}
+						for _, parent := range parents {
+							fmt.Printf("  ↑ %s: %s [P%d]\n", parent.ID, parent.Title, parent.Priority)
+						}
+					}
+
+					// Display other dependencies
+					if len(otherDeps) > 0 {
+						fmt.Printf("\nDepends on (%d):\n", len(otherDeps))
+						for _, dep := range otherDeps {
+							fmt.Printf("  → %s: %s [P%d]\n", dep.ID, dep.Title, dep.Priority)
+						}
+					}
+				}
+			} else {
+				// Fallback for non-SQLite storage (no metadata available)
+				deps, _ := issueStore.GetDependencies(ctx, issue.ID)
+				if len(deps) > 0 {
+					fmt.Printf("\nDepends on (%d):\n", len(deps))
+					for _, dep := range deps {
+						fmt.Printf("  → %s: %s [P%d]\n", dep.ID, dep.Title, dep.Priority)
+					}
 				}
 			}
 
