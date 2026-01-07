@@ -164,7 +164,7 @@ func TestShow_ParentSeparation(t *testing.T) {
 		task := createIssue("Task with single parent", "task")
 		addDep(task, epic, "parent-child")
 
-		// Text output should show "Parent:" (singular)
+		// Text output should show "Parent:" (singular) with status
 		showCmd := exec.Command(tmpBin, "--no-daemon", "show", task)
 		showCmd.Dir = tmpDir
 		showOut, err := showCmd.CombinedOutput()
@@ -179,6 +179,9 @@ func TestShow_ParentSeparation(t *testing.T) {
 		if !strings.Contains(out, "↑ "+epic) {
 			t.Errorf("expected parent with ↑ symbol, got: %s", out)
 		}
+		if !strings.Contains(out, "[P2 - open]") {
+			t.Errorf("expected parent with status [P2 - open], got: %s", out)
+		}
 		if strings.Contains(out, "Parents (") {
 			t.Errorf("should not show 'Parents (' for single parent, got: %s", out)
 		}
@@ -191,7 +194,7 @@ func TestShow_ParentSeparation(t *testing.T) {
 		addDep(task, epic1, "parent-child")
 		addDep(task, epic2, "parent-child")
 
-		// Text output should show "Parents (2):" (plural with count)
+		// Text output should show "Parents (2):" (plural with count) with status
 		showCmd := exec.Command(tmpBin, "--no-daemon", "show", task)
 		showCmd.Dir = tmpDir
 		showOut, err := showCmd.CombinedOutput()
@@ -206,6 +209,10 @@ func TestShow_ParentSeparation(t *testing.T) {
 		if !strings.Contains(out, "↑ "+epic1) || !strings.Contains(out, "↑ "+epic2) {
 			t.Errorf("expected both parents with ↑ symbols, got: %s", out)
 		}
+		// Check that status is displayed for parents
+		if !strings.Contains(out, "[P2 - open]") {
+			t.Errorf("expected parents with status [P2 - open], got: %s", out)
+		}
 	})
 
 	t.Run("parent_and_blocking", func(t *testing.T) {
@@ -215,7 +222,7 @@ func TestShow_ParentSeparation(t *testing.T) {
 		addDep(task, epic, "parent-child")
 		addDep(task, blocker, "blocks")
 
-		// Text output should show parent separately from blocking dep
+		// Text output should show parent separately from blocking dep, both with status
 		showCmd := exec.Command(tmpBin, "--no-daemon", "show", task)
 		showCmd.Dir = tmpDir
 		showOut, err := showCmd.CombinedOutput()
@@ -235,6 +242,10 @@ func TestShow_ParentSeparation(t *testing.T) {
 		}
 		if !strings.Contains(out, "→ "+blocker) {
 			t.Errorf("expected blocker with → symbol, got: %s", out)
+		}
+		// Check that status is displayed for both parent and blocking dep
+		if !strings.Contains(out, "[P2 - open]") {
+			t.Errorf("expected status [P2 - open] in output, got: %s", out)
 		}
 	})
 

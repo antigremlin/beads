@@ -295,7 +295,7 @@ var showCmd = &cobra.Command{
 								fmt.Printf("\nParents (%d):\n", len(parents))
 							}
 							for _, parent := range parents {
-								fmt.Printf("  ↑ %s: %s [P%d]\n", parent.ID, parent.Title, parent.Priority)
+								fmt.Printf("  ↑ %s: %s [P%d - %s]\n", parent.ID, parent.Title, parent.Priority, parent.Status)
 							}
 						}
 
@@ -303,7 +303,7 @@ var showCmd = &cobra.Command{
 						if len(otherDeps) > 0 {
 							fmt.Printf("\nDepends on (%d):\n", len(otherDeps))
 							for _, dep := range otherDeps {
-								fmt.Printf("  → %s: %s [P%d]\n", dep.ID, dep.Title, dep.Priority)
+								fmt.Printf("  → %s: %s [P%d - %s]\n", dep.ID, dep.Title, dep.Priority, dep.Status)
 							}
 						}
 					}
@@ -558,7 +558,7 @@ var showCmd = &cobra.Command{
 							fmt.Printf("\nParents (%d):\n", len(parents))
 						}
 						for _, parent := range parents {
-							fmt.Printf("  ↑ %s: %s [P%d]\n", parent.ID, parent.Title, parent.Priority)
+							fmt.Printf("  ↑ %s: %s [P%d - %s]\n", parent.ID, parent.Title, parent.Priority, parent.Status)
 						}
 					}
 
@@ -566,7 +566,7 @@ var showCmd = &cobra.Command{
 					if len(otherDeps) > 0 {
 						fmt.Printf("\nDepends on (%d):\n", len(otherDeps))
 						for _, dep := range otherDeps {
-							fmt.Printf("  → %s: %s [P%d]\n", dep.ID, dep.Title, dep.Priority)
+							fmt.Printf("  → %s: %s [P%d - %s]\n", dep.ID, dep.Title, dep.Priority, dep.Status)
 						}
 					}
 				}
