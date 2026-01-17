@@ -57,9 +57,17 @@ func gitHasUpstream() bool {
 	}
 	branch := strings.TrimSpace(string(branchOutput))
 
-	// Check if remote and merge refs are configured
-	remoteCmd := exec.Command("git", "config", "--get", fmt.Sprintf("branch.%s.remote", branch)) //nolint:gosec // G204: branch from git symbolic-ref
-	mergeCmd := exec.Command("git", "config", "--get", fmt.Sprintf("branch.%s.merge", branch))   //nolint:gosec // G204: branch from git symbolic-ref
+	return gitBranchHasUpstream(branch)
+}
+
+// gitBranchHasUpstream checks if a specific branch has an upstream configured.
+// Unlike gitHasUpstream(), this works even when HEAD is detached (e.g., jj/jujutsu).
+// This is critical for sync-branch workflows where the sync branch has upstream
+// tracking but the main working copy may be in detached HEAD state.
+func gitBranchHasUpstream(branch string) bool {
+	// Check if remote and merge refs are configured for the branch
+	remoteCmd := exec.Command("git", "config", "--get", fmt.Sprintf("branch.%s.remote", branch)) //nolint:gosec // G204: branch from caller
+	mergeCmd := exec.Command("git", "config", "--get", fmt.Sprintf("branch.%s.merge", branch))   //nolint:gosec // G204: branch from caller
 
 	remoteErr := remoteCmd.Run()
 	mergeErr := mergeCmd.Run()
@@ -201,10 +209,21 @@ func gitCommitBeadsDir(ctx context.Context, message string) error {
 		return fmt.Errorf("no .beads directory found")
 	}
 
-	// Get the repository root (handles worktrees properly)
-	repoRoot := getRepoRootForWorktree(ctx)
-	if repoRoot == "" {
-		return fmt.Errorf("cannot determine repository root")
+	// Determine the repository root
+	// When beads directory is redirected (bd-arjb), we need to run git commands
+	// from the directory containing the actual .beads/, not the current working directory
+	var repoRoot string
+	redirectInfo := beads.GetRedirectInfo()
+	if redirectInfo.IsRedirected {
+		// beadsDir is the target (e.g., /path/to/mayor/rig/.beads)
+		// We need to run git from the parent of .beads (e.g., /path/to/mayor/rig)
+		repoRoot = filepath.Dir(beadsDir)
+	} else {
+		// Get the repository root (handles worktrees properly)
+		repoRoot = getRepoRootForWorktree(ctx)
+		if repoRoot == "" {
+			return fmt.Errorf("cannot determine repository root")
+		}
 	}
 
 	// Stage only the specific sync-related files
@@ -455,6 +474,14 @@ func restoreBeadsDirFromBranch(ctx context.Context) error {
 		return fmt.Errorf("no .beads directory found")
 	}
 
+	// Skip restore when beads directory is redirected (bd-lmqhe)
+	// When redirected, the beads directory is in a different repo, so
+	// git checkout from the current repo won't work for paths outside it.
+	redirectInfo := beads.GetRedirectInfo()
+	if redirectInfo.IsRedirected {
+		return nil
+	}
+
 	// Restore .beads/ from HEAD (current branch's committed state)
 	// Using -- to ensure .beads/ is treated as a path, not a branch name
 	cmd := exec.CommandContext(ctx, "git", "checkout", "HEAD", "--", beadsDir) //nolint:gosec // G204: beadsDir from FindBeadsDir(), not user input
@@ -523,27 +550,6 @@ func parseGitStatusForBeadsChanges(statusOutput string) bool {
 	}
 
 	return false
-}
-
-// rollbackJSONLFromGit restores the JSONL file from git HEAD after a failed commit.
-// This is part of the sync atomicity fix (GH#885/bd-3bhl): when git commit fails
-// after export, we restore the JSONL to its previous state so the working
-// directory stays consistent with the last successful sync.
-func rollbackJSONLFromGit(ctx context.Context, jsonlPath string) error {
-	// Check if the file is tracked by git
-	cmd := exec.CommandContext(ctx, "git", "ls-files", "--error-unmatch", jsonlPath)
-	if err := cmd.Run(); err != nil {
-		// File not tracked - nothing to restore
-		return nil
-	}
-
-	// Restore from HEAD
-	restoreCmd := exec.CommandContext(ctx, "git", "checkout", "HEAD", "--", jsonlPath) //nolint:gosec // G204: jsonlPath from internal beads.FindBeadsDir()
-	output, err := restoreCmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git checkout failed: %w\n%s", err, output)
-	}
-	return nil
 }
 
 // getDefaultBranch returns the default branch name (main or master) for origin remote
