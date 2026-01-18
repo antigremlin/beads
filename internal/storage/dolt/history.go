@@ -134,7 +134,7 @@ func (s *DoltStore) GetIssueAsOf(ctx context.Context, issueID string, ref string
 	var assignee, owner, contentHash sql.NullString
 	var estimatedMinutes sql.NullInt64
 
-	// Note: AS OF requires literal value, but we've validated ref is safe
+	// nolint:gosec // G201: ref is validated by validateRef() above - AS OF requires literal
 	query := fmt.Sprintf(`
 		SELECT id, content_hash, title, description, status, priority, issue_type, assignee, estimated_minutes,
 		       created_at, created_by, owner, updated_at, closed_at
@@ -216,7 +216,7 @@ func (s *DoltStore) GetIssueDiff(ctx context.Context, issueID, fromRef, toRef st
 		return nil, fmt.Errorf("invalid toRef: %w", err)
 	}
 
-	// Note: dolt_diff_issues requires literal values, but we've validated refs are safe
+	// nolint:gosec // G201: refs are validated by validateRef() above - dolt_diff_issues requires literal
 	query := fmt.Sprintf(`
 		SELECT
 			from_id, to_id,
@@ -288,8 +288,9 @@ type IssueDiff struct {
 	ToDescription   string
 }
 
-// GetConflicts returns any merge conflicts in the current state
-func (s *DoltStore) GetConflicts(ctx context.Context) ([]*Conflict, error) {
+// GetInternalConflicts returns any merge conflicts in the current state (internal format).
+// For the public interface, use GetConflicts which returns storage.Conflict.
+func (s *DoltStore) GetInternalConflicts(ctx context.Context) ([]*TableConflict, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT table_name, num_conflicts FROM dolt_conflicts
 	`)
@@ -298,9 +299,9 @@ func (s *DoltStore) GetConflicts(ctx context.Context) ([]*Conflict, error) {
 	}
 	defer rows.Close()
 
-	var conflicts []*Conflict
+	var conflicts []*TableConflict
 	for rows.Next() {
-		var c Conflict
+		var c TableConflict
 		if err := rows.Scan(&c.TableName, &c.NumConflicts); err != nil {
 			return nil, fmt.Errorf("failed to scan conflict: %w", err)
 		}
@@ -310,8 +311,8 @@ func (s *DoltStore) GetConflicts(ctx context.Context) ([]*Conflict, error) {
 	return conflicts, rows.Err()
 }
 
-// Conflict represents a merge conflict
-type Conflict struct {
+// TableConflict represents a Dolt table-level merge conflict (internal representation).
+type TableConflict struct {
 	TableName    string
 	NumConflicts int
 }

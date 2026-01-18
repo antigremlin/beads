@@ -3,15 +3,29 @@ package dolt
 import (
 	"context"
 	"os"
+	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/steveyegge/beads/internal/types"
 )
 
+// testTimeout is the maximum time for any single test operation.
+// The embedded Dolt driver can be slow, especially for complex JOIN queries.
+// If tests are timing out, it may indicate an issue with the embedded Dolt
+// driver's async operations rather than with the DoltStore implementation.
+const testTimeout = 30 * time.Second
+
+// testContext returns a context with timeout for test operations
+func testContext(t *testing.T) (context.Context, context.CancelFunc) {
+	t.Helper()
+	return context.WithTimeout(context.Background(), testTimeout)
+}
+
 // skipIfNoDolt skips the test if Dolt is not installed
 func skipIfNoDolt(t *testing.T) {
 	t.Helper()
-	if _, err := os.Stat("/usr/local/bin/dolt"); os.IsNotExist(err) {
+	if _, err := exec.LookPath("dolt"); err != nil {
 		t.Skip("Dolt not installed, skipping test")
 	}
 }
@@ -21,7 +35,9 @@ func setupTestStore(t *testing.T) (*DoltStore, func()) {
 	t.Helper()
 	skipIfNoDolt(t)
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
+
 	tmpDir, err := os.MkdirTemp("", "dolt-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -93,7 +109,8 @@ func TestDoltStoreConfig(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Test SetConfig
 	if err := store.SetConfig(ctx, "test_key", "test_value"); err != nil {
@@ -135,7 +152,8 @@ func TestDoltStoreIssue(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create an issue
 	issue := &types.Issue{
@@ -172,7 +190,8 @@ func TestDoltStoreIssueUpdate(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create an issue
 	issue := &types.Issue{
@@ -218,7 +237,8 @@ func TestDoltStoreIssueClose(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create an issue
 	issue := &types.Issue{
@@ -255,7 +275,8 @@ func TestDoltStoreLabels(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create an issue
 	issue := &types.Issue{
@@ -306,7 +327,8 @@ func TestDoltStoreDependencies(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create parent and child issues
 	parent := &types.Issue{
@@ -395,7 +417,8 @@ func TestDoltStoreSearch(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create multiple issues
 	issues := []*types.Issue{
@@ -465,7 +488,8 @@ func TestDoltStoreCreateIssues(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create multiple issues in batch
 	issues := []*types.Issue{
@@ -510,7 +534,8 @@ func TestDoltStoreComments(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create an issue
 	issue := &types.Issue{
@@ -557,7 +582,8 @@ func TestDoltStoreEvents(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create an issue (this creates a creation event)
 	issue := &types.Issue{
@@ -592,7 +618,8 @@ func TestDoltStoreDeleteIssue(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create an issue
 	issue := &types.Issue{
@@ -633,7 +660,8 @@ func TestDoltStoreDirtyTracking(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create an issue (marks it dirty)
 	issue := &types.Issue{
@@ -686,7 +714,8 @@ func TestDoltStoreStatistics(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create some issues
 	issues := []*types.Issue{
@@ -776,7 +805,8 @@ func TestDoltStoreGetReadyWork(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx, cancel := testContext(t)
+	defer cancel()
 
 	// Create issues: one blocked, one ready
 	blocker := &types.Issue{

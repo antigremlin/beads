@@ -16,6 +16,7 @@ import (
 	"github.com/steveyegge/beads/internal/routing"
 	"github.com/steveyegge/beads/internal/rpc"
 	"github.com/steveyegge/beads/internal/storage"
+	"github.com/steveyegge/beads/internal/storage/factory"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/timeparsing"
 	"github.com/steveyegge/beads/internal/types"
@@ -196,7 +197,7 @@ var createCmd = &cobra.Command{
 				Notes:              notes,
 				Status:             types.StatusOpen,
 				Priority:           priority,
-				IssueType:          types.IssueType(issueType),
+				IssueType:          types.IssueType(issueType).Normalize(),
 				Assignee:           assignee,
 				ExternalRef:        externalRefPtr,
 				Ephemeral:          wisp,
@@ -353,10 +354,10 @@ var createCmd = &cobra.Command{
 				FatalError("failed to initialize target repo: %v", err)
 			}
 
-			// Open new store for target repo
-			targetDBPath := filepath.Join(targetBeadsDir, ".beads", "beads.db")
+			// Open new store for target repo using factory to respect backend config
+			targetBeadsDirPath := filepath.Join(targetBeadsDir, ".beads")
 			var err error
-			targetStore, err = sqlite.New(rootCtx, targetDBPath)
+			targetStore, err = factory.NewFromConfig(rootCtx, targetBeadsDirPath)
 			if err != nil {
 				FatalError("failed to open target store: %v", err)
 			}
@@ -399,9 +400,23 @@ var createCmd = &cobra.Command{
 
 		// Validate explicit ID format if provided
 		if explicitID != "" {
-			requestedPrefix, err := validation.ValidateIDFormat(explicitID)
-			if err != nil {
-				FatalError("%v", err)
+			var requestedPrefix string
+			var err error
+
+			// For agent types, use agent-aware prefix extraction.
+			// This fixes the bug where 3-char polecat names like "nux" in
+			// "nx-nexus-polecat-nux" were incorrectly treated as hash suffixes,
+			// causing prefix to be extracted as "nx-nexus-polecat" instead of "nx".
+			if issueType == "agent" {
+				if err := validation.ValidateAgentID(explicitID); err != nil {
+					FatalError("invalid agent ID: %v", err)
+				}
+				requestedPrefix = validation.ExtractAgentPrefix(explicitID)
+			} else {
+				requestedPrefix, err = validation.ValidateIDFormat(explicitID)
+				if err != nil {
+					FatalError("%v", err)
+				}
 			}
 
 			// Validate prefix matches database prefix
@@ -429,13 +444,6 @@ var createCmd = &cobra.Command{
 
 			if err := validation.ValidatePrefixWithAllowed(requestedPrefix, dbPrefix, allowedPrefixes, forceCreate); err != nil {
 				FatalError("%v", err)
-			}
-
-			// Validate agent ID pattern if type is agent
-			if issueType == "agent" {
-				if err := validation.ValidateAgentID(explicitID); err != nil {
-					FatalError("invalid agent ID: %v", err)
-				}
 			}
 		}
 
@@ -519,7 +527,7 @@ var createCmd = &cobra.Command{
 			Notes:              notes,
 			Status:             types.StatusOpen,
 			Priority:           priority,
-			IssueType:          types.IssueType(issueType),
+			IssueType:          types.IssueType(issueType).Normalize(),
 			Assignee:           assignee,
 			ExternalRef:        externalRefPtr,
 			EstimatedMinutes:   estimatedMinutes,
@@ -728,7 +736,7 @@ func init() {
 	createCmd.Flags().Bool("silent", false, "Output only the issue ID (for scripting)")
 	createCmd.Flags().Bool("dry-run", false, "Preview what would be created without actually creating")
 	registerPriorityFlag(createCmd, "2")
-	createCmd.Flags().StringP("type", "t", "task", "Issue type (bug|feature|task|epic|chore|merge-request|molecule|gate|agent|role|rig|convoy|event)")
+	createCmd.Flags().StringP("type", "t", "task", "Issue type (bug|feature|task|epic|chore|merge-request|molecule|gate|agent|role|rig|convoy|event); enhancement is alias for feature")
 	registerCommonIssueFlags(createCmd)
 	createCmd.Flags().StringSliceP("labels", "l", []string{}, "Labels (comma-separated)")
 	createCmd.Flags().StringSlice("label", []string{}, "Alias for --labels")
@@ -785,9 +793,8 @@ func createInRig(cmd *cobra.Command, rigName, title, description, issueType stri
 		FatalError("%v", err)
 	}
 
-	// Open storage for the target rig
-	targetDBPath := filepath.Join(targetBeadsDir, "beads.db")
-	targetStore, err := sqlite.New(ctx, targetDBPath)
+	// Open storage for the target rig using factory to respect backend config
+	targetStore, err := factory.NewFromConfig(ctx, targetBeadsDir)
 	if err != nil {
 		FatalError("failed to open rig %q database: %v", rigName, err)
 	}
@@ -854,7 +861,7 @@ func createInRig(cmd *cobra.Command, rigName, title, description, issueType stri
 		Notes:              notes,
 		Status:             types.StatusOpen,
 		Priority:           priority,
-		IssueType:          types.IssueType(issueType),
+		IssueType:          types.IssueType(issueType).Normalize(),
 		Assignee:           assignee,
 		ExternalRef:        externalRefPtr,
 		Ephemeral:          wisp,

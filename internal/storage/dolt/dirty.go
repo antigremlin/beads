@@ -55,6 +55,7 @@ func (s *DoltStore) ClearDirtyIssuesByID(ctx context.Context, issueIDs []string)
 		args[i] = id
 	}
 
+	// nolint:gosec // G201: placeholders contains only ? markers, actual values passed via args
 	query := fmt.Sprintf("DELETE FROM dirty_issues WHERE issue_id IN (%s)", strings.Join(placeholders, ","))
 	_, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -81,7 +82,7 @@ func (s *DoltStore) SetExportHash(ctx context.Context, issueID, contentHash stri
 		INSERT INTO export_hashes (issue_id, content_hash, exported_at)
 		VALUES (?, ?, ?)
 		ON DUPLICATE KEY UPDATE content_hash = VALUES(content_hash), exported_at = VALUES(exported_at)
-	`, issueID, contentHash, time.Now())
+	`, issueID, contentHash, time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("failed to set export hash: %w", err)
 	}

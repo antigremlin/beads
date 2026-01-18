@@ -28,8 +28,10 @@ func ParsePriority(content string) int {
 
 // ParseIssueType extracts and validates an issue type from content.
 // Returns the validated type or error if invalid.
+// Supports type aliases like "enhancement" -> "feature".
 func ParseIssueType(content string) (types.IssueType, error) {
-	issueType := types.IssueType(strings.TrimSpace(content))
+	// Normalize to support aliases like "enhancement" -> "feature"
+	issueType := types.IssueType(strings.TrimSpace(content)).Normalize()
 
 	// Use the canonical IsValid() from types package
 	if !issueType.IsValid() {
@@ -166,6 +168,22 @@ func isNamedRole(s string) bool {
 		}
 	}
 	return false
+}
+
+// ExtractAgentPrefix extracts the prefix from an agent ID.
+// Agent IDs have the format: prefix-rig-role-name or prefix-role
+// The prefix is always the part before the first hyphen.
+// Examples:
+//   - "gt-gastown-polecat-nux" -> "gt"
+//   - "nx-nexus-polecat-nux" -> "nx"
+//   - "gt-mayor" -> "gt"
+//   - "bd-beads-witness" -> "bd"
+func ExtractAgentPrefix(id string) string {
+	hyphenIdx := strings.Index(id, "-")
+	if hyphenIdx <= 0 {
+		return ""
+	}
+	return id[:hyphenIdx]
 }
 
 // ValidateAgentID validates that an agent ID follows the expected pattern.
